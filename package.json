@@ -1,0 +1,71 @@
+{
+  "name": "probe",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build",
+    "lint": "vue-cli-service lint"
+  },
+  "dependencies": {
+    "bcrypt": "^3.0.4",
+    "jsonwebtoken": "^8.5.0",
+    "mammoth": "^1.4.7",
+    "v-click-outside": "^2.0.2",
+    "virtual-keyboard": "^1.28.7",
+    "vue": "^2.5.17",
+    "vue-bus": "^1.2.0",
+    "vue-virtual-keyboard": "^1.1.0",
+    "vuetify": "^1.3.0"
+  },
+  "devDependencies": {
+    "@vue/cli-plugin-babel": "^3.1.1",
+    "@vue/cli-plugin-eslint": "^3.1.5",
+    "@vue/cli-service": "^3.1.4",
+    "babel-eslint": "^10.0.1",
+    "body-parser": "latest",
+    "cors": "latest",
+    "eslint": "^5.8.0",
+    "eslint-plugin-vue": "^5.0.0-0",
+    "express": "latest",
+    "lodash": "latest",
+    "mark.js": "^8.11.1",
+    "mongoose": "latest",
+    "multer": "latest",
+    "path": "latest",
+    "pdfjs-dist": "^2.0.943",
+    "simple-keyboard": "^2.15.4",
+    "stylus": "^0.54.5",
+    "stylus-loader": "^3.0.1",
+    "vue-cli-plugin-vuetify": "^0.4.6",
+    "vue-resource": "latest",
+    "vue-router": "latest",
+    "vue-template-compiler": "^2.5.17",
+    "vuetify-loader": "^1.0.5",
+    "vuex": "^3.1.0"
+  },
+  "eslintConfig": {
+    "root": true,
+    "env": {
+      "node": true
+    },
+    "extends": [
+      "plugin:vue/essential",
+      "eslint:recommended"
+    ],
+    "rules": {},
+    "parserOptions": {
+      "parser": "babel-eslint"
+    }
+  },
+  "postcss": {
+    "plugins": {
+      "autoprefixer": {}
+    }
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not ie <= 8"
+  ]
+}
