@@ -7,6 +7,8 @@ import VueBus from 'vue-bus';
 
 import Login from './vuex/login.js';
 
+import './assets/styles/main.css';
+
 Vue.use(VueBus);
 Vue.use(Vuex);
 

@@ -17,7 +17,7 @@ let router = new Router({
   routes: [
     {
       path: '/books',
-      name: 'Tamil Books',
+      name: 'Tamil Messages',
       component: Books  
     },
     {
@@ -51,8 +51,12 @@ let router = new Router({
       component: Login
     },
     {
+      path: '/Downloads',
+      redirect: './downloader/message.html'
+    },
+    {
       path: '*',
-      redirect: '/home'
+      redirect: '/books'
     }
   ]
 })

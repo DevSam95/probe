@@ -2,7 +2,7 @@
   <div>
     <div class="video-container" v-for="video in videos" :key="video.name">
       <span class="video-title"> {{ video.name }} </span>
-      <iframe :src="video.src" />
+      <iframe v-if="video.src" :src="video.src" />
     </div>
   </div>
 </template>
@@ -13,8 +13,7 @@ export default {
     return {
       videos: [
         {
-          name: 'Intro to Web Design',
-          src: 'https://youtu.be/F4fbwKV9dBU'
+          name: 'Coming Soon...',
         }
       ]
     }
@@ -29,6 +28,7 @@ export default {
 }
 
 .video-title {
-  font-size: 1rem;
+  align-self: center;
+  font-size: 30px;
 }
 </style>

@@ -2,10 +2,14 @@
 node_modules
 /dist
 /uploads
+/db
+/mongodb
 
 # local env files
 .env.local
 .env.*.local
+.env
+*.bat
 
 # Log files
 npm-debug.log*

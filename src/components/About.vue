@@ -19,5 +19,7 @@ export default {
 </script>
 
 <style scoped>
-
+.about-container {
+  padding: 10px;
+}
 </style>

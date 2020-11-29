@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div>
+    <div class="multimedia-container">
       <div>
         <v-tabs
           v-model="activeTab"
@@ -56,5 +56,8 @@ export default {
 };
 </script>
 
-<style>
+<style scoped>
+.multimedia-container {
+  padding: 10px;
+}
 </style>

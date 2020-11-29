@@ -1,32 +1,50 @@
 import VueResource from 'vue-resource';
 import Vue from 'vue';
 
+const api = process.env.VUE_APP_API || 'http://localhost:1234';
+
 Vue.use(VueResource);
 
 const customActions = {
   uploadDoc: {
     method: 'POST',
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    },
-    url: 'http://localhost:1234/docs/uploadDoc',
+    url: `${api}/docs/uploadDoc`,
     progress: (e) => {
       if (e.lengthComputable) {
         let percentage = e.loaded / e.total * 100;
-        console.log(percentage);
         return percentage;
       }
     }
   },
 
+  deleteDoc: {
+    method: 'PUT',
+    url: `${api}/docs/deleteDoc{/id}`
+  },
+
+  deleteParas: {
+    method: 'PUT',
+    url: `${api}/docs/deleteParas`
+  },
+
   getDocuments: {
     method: 'GET',
-    url: 'http://localhost:1234/docs/readAll'
+    url: `${api}/docs/readAll`
   },
 
   getFile: {
     method: 'GET',
-    url: 'http://localhost:1234/docs/readOne{/id}',
+    url: `${api}/docs/readOne{/id}`,
+  },
+
+  getCount: {
+    method: 'GET',
+    url: `${api}/docs/count`
+  },
+
+  filterParas: {
+    method: 'GET',
+    url: `${api}/docs/filterParas`,
   }
 }
 

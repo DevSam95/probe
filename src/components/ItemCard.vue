@@ -1,11 +1,18 @@
 <template>
-  <div :id="id" @click="cardClicked">
+  <div :id="id" @click="cardClicked()">
     <v-hover>
       <v-card 
-      slot-scope="{hover}"
-      :class="`elevation-${hover ? 12 : 2}`"
-      class="card mx-auto" 
-      ripple>
+        slot-scope="{hover}"
+        :class="`elevation-${hover ? 12 : 2}`"
+        class="card mx-auto" 
+        :ripple="!isLoggedIn">
+
+        <div v-show="isSeen" class="done-icon-container">
+          <v-btn icon small depressed color="green">
+            <v-icon class="done-icon" color="white">done</v-icon>
+          </v-btn>
+        </div>
+        
         <v-card-title>
           <div>
             <h3 class="mb-8 book-title"> {{ getName(name) }} </h3>
@@ -14,6 +21,11 @@
             </div>
           </div>
         </v-card-title>
+        <div class="delete-icon" v-if="isLoggedIn && terms.length === 0">
+          <v-btn flat icon color="red" @click="showDeletePopup">
+            <v-icon>delete</v-icon>
+          </v-btn>
+        </div>
       </v-card>
     </v-hover>
   </div>
@@ -21,12 +33,17 @@
 
 <script>
 import Mark from 'mark.js';
+import { mapGetters } from 'vuex';
 
 export default {
   props: {
     index: {
       type: [Number, String],
       default: 0
+    },
+    seenParas: {
+      type: Array,
+      default: () => []
     },
     id: {
       type: [Number, String],
@@ -51,19 +68,25 @@ export default {
     }
   },
 
+  computed: {
+    isSeen() {
+      return this.seenParas.includes(this.id);
+    },
+
+    ...mapGetters(['isLoggedIn'])
+  },
+
   methods: {
+    showDeletePopup() {
+      this.showDialog = true;
+    },
+
     getName(name) {
       return name.indexOf('.docx') !== -1 ? name.substr(0, name.length - 5) : name;
     },
 
-    markTerms() {
-      var context = document.querySelector('.paragraphs');
-      var instance = new Mark(context);
-      instance.mark(this.terms);
-    },
-
     cardClicked() {
-      this.$emit('cardClicked', {id: this.id, index: this.index });
+      this.$emit('cardClicked', {name: this.name, index: this.index, paraId: this.id });
     }
   }
 }
@@ -76,5 +99,15 @@ export default {
 }
 .book-title {
   padding-bottom: 10px;
+}
+.delete-icon {
+  position: absolute;
+  right: 15px;
+  bottom: 10px;
+}
+
+.done-icon-container {
+  position: absolute;
+  right: 0;
 }
 </style>

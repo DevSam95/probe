@@ -1,61 +1,71 @@
 <template>
   <div>
-    <div class="search-container">
-      <div class="search-field-container">
-        <div class="search-field">
-          <v-text-field id="keyboard" v-model="searchTerms" prepend-inner-icon="search"></v-text-field>
-          <v-icon @click="toggleKeyboard">keyboard</v-icon>
-          <v-btn class="search-button" color="info" @click="searchForBooks">Search</v-btn>
-          <div class="search-filters" v-if="searchTerms.length > 0">
-            <div @click="changeMode('Books')" :class="['books', {'text-hightlight': mode === 'Books'}]"> Books </div> 
-            <div @click="changeMode('All')" :class="['all', {'text-hightlight': mode === 'All'}]"> All </div>
+    <div class="book-container">
+      <div
+        class="aside"
+        v-show="showBooks">
+        <div>
+          <div v-show="showBookSearch">
+            <book-list :documents="documents"
+                       @documentDeleted="deleteDocument"
+                       @itemSelected="showContent">
+            </book-list>
+          </div>
+
+          <div v-show="showParaSearch">
+            <para-search @showContent="showContent"
+                        @resetSearchTerms="resetSearchTerms"
+                        @termsMarked="markTerms"
+                        @hideParaSearch="hideParaSearch"
+                        @updateTerms="updateSearchTerms">
+            </para-search>
           </div>
         </div>
-        <div v-show="showKeyboard" class="keyboard-container">
-          <div class="simple-keyboard"></div>
-        </div>
+      </div>
+
+      <div :class="['viewer', {'viewer-left': !showBooks}, {'full-screen': viewerFullScreen}]" id="documentContainer">
+        <pdf-viewer
+          ref="viewer"
+          :showBooks="showBooks"
+          :terms="searchTerms"
+          :id="activeDocumentId"
+          :docContent="activeDocContent"
+          :index="activeIndex"
+          :showAllResults="showParaSearch"
+          @booksToggled="showBooks = !showBooks"
+          @showBookList="showBookList"
+          @fullScreen="toggleFullScreen"
+          @showSearch="toggleParaSearch">
+        </pdf-viewer>
       </div>
     </div>
-    <div>
-      <div v-if="mode === 'Books'">
-        <item-card  @cardClicked="showContent" 
-                    ref="itemCard"
-                    class="card"
-                    :key="v.documentName"
-                    v-for="v in documents"
-                    :name="v.documentName"
-                    :terms="searchTerms"
-                    :id="v._id"
-                    :para="v.paragraphs[4]">
-        </item-card>
-      </div>
-      <div v-else-if="mode === 'All'">
-        <item-card  @cardClicked="showContent"
-                    ref="itemCard"
-                    class="card"
-                    :key="vi + 1"
-                    v-for="(v, vi) in getParagraphs()"
-                    :name="v.name"
-                    :terms="searchTerms"
-                    :id="v.id"
-                    :index="vi"
-                    :para="v.paragraph">
-        </item-card>        
-      </div>
+
+    <div class="loader">  
+      <v-dialog max-width="300" v-model="isLoading">
+        <v-progress-linear color="#87cefa" active indeterminate></v-progress-linear>
+      </v-dialog>
     </div>
   </div>
 </template>
 
 <script>
-import Keyboard from 'simple-keyboard';
+import SimpleKeyboard from './SimpleKeybard';
 import 'simple-keyboard/build/css/index.css';
 import vClickOutside from 'v-click-outside';
 import Mark from 'mark.js';
 
+import ItemCard from './ItemCard';
+import ItemList from './ItemList';
+import PdfViewer from './PdfViewer';
+import Tooltip from './Tooltip';
+
+import BookList from './BookList';
+import ParaSearch from './ParaSearch';
+
 import _ from 'lodash';
 
-import ItemCard from './ItemCard';
 import DocumentService from '../resources/documentService';
+import { stat } from 'fs';
 
 export default {
   directives: {
@@ -64,127 +74,182 @@ export default {
 
   components: {
     ItemCard,
-    Keyboard
+    ItemList,
+    PdfViewer,
+    Tooltip,
+    SimpleKeyboard,
+    BookList,
+    ParaSearch
   },
 
   data() {
     return {
+      on: true,
+      drawer: true,
       documents: [],
+      paragraphs: [],
+      isLoading: true,
+      activeDocumentId: 0,
       searchTerms: '',
-      showKeyboard: '',
       keyboardTerms: '',
       showKeyboard: false,
-      mode: 'Books',
-      keyboardOption: {
-        usePreview: false,
-        stickyShift: false,
-        autoAccept: true,
-        language: 'ta'
-      },
+      keyboard: null,
+      activeContent: null,
+      searchMode: 'All',
+      isMobile: !this.$vuetify.breakpoint.mdAndUp,
+      showBooks: this.$vuetify.breakpoint.mdAndUp,
+      showAllResults: false,
+      showDialog: false,
+      showSearchMenu: false,
+      activeDocContent: '',
+      activeIndex: 0,
+      viewerFullScreen: false,
+      termCount: 0,
+      docsInList: [],
+      showBookSearch: true,
+      showParaSearch: false
     };
   },
 
   created() {
     this.getAllDocuments();
   },
-
-  mounted() {
-    let that = this;
-    let keyboard = new Keyboard({
-      onChange: input => onChange(input),
-      onKeyPress: button => onKeyPress(button),
-      layout: {
-    'default' : [
-        /* ா    ி    ீ    ு    ூ    ெ    ே    ை    ொ    ோ    ௌ    ஃ  */
-        "\u0BBE \u0BBF \u0BC0 \u0BC1 \u0BC2 \u0BC6 \u0BC7 \u0BC8 \u0BCA \u0BCB \u0BCC \u0B83 {bksp}",
-        /*      ஆ     ஈ      ஊ     ஐ    ஏ      ள      ற     ன     ட      ண   ச      ஞ   \   */
-        "{tab} \u0b86 \u0b88 \u0b8a \u0b90 \u0b8f \u0bb3 \u0bb1 \u0ba9 \u0b9f \u0ba3 \u0b9a \u0b9e ",
-        /*  அ    இ      உ     ்       எ      க      ப    ம      த      ந      ய  */
-        "\u0b85 \u0b87  \u0b89 \u0bcd  \u0b8e  \u0b95 \u0baa \u0bae \u0ba4 \u0ba8 \u0baf {enter}",
-        /*         ஔ    ஒ      ஓ    வ     ங     ல      ர    , . ழ    */
-        "{shift} \u0b94 \u0b93 \u0b92 \u0bb5 \u0b99 \u0bb2 \u0bb0 , . \u0bb4 {shift}",
-        "{accept} {alt} {space} {alt} {cancel}"
-    ],
-    'shift' : [
-         /* numeric key row */
-        "`      1      2       3      4     5     6   7  8  9  0 -  =  {bksp}",
-        /* sanskrit row */
-        /*     ஸ      ஷ        ஜ      ஹ           ஶ்ரீ                       க்ஷ                       */
-        "{tab} \u0bb8  \u0bb7  \u0b9c   \u0bb9  \u0bb6\u0bcd\u0bb0\u0bc0  \u0b95\u0bcd\u0bb7 \u0020  [ ]  { } ",
-        /* ௹     ௺    ௸     ஃ  \u0020 \u0020 \u0020 \" : ; \' {enter} */
-        "\u0bf9 \u0bfa \u0bf8 \u0b83 \u0020 \u0020 \u0020 \" : ; \' {enter}",
-        /* ௳ ௴ ௵ ௶ ௷ */
-        "{shift} \u0bf3 \u0bf4 \u0bf5 \u0bf6 \u0bf7 \u0020 / \u0020 \u0020 / {shift}",
-        "{accept} {alt} {space} {alt} {cancel}"
-    ]
-
-}
-    });
-
-    function onChange(input){
-      that.searchTerms = input;
-    }
-
-    function onKeyPress(button){
-      if (button === '{cancel}') {
-        that.searchTerms = '';
-        Keyboard.clearInput();
-        that.showKeyboard = false;
-      } else if (button === '{backspace}') {
-        // that.searchTerms = that.searchTerms.substr(0, that.searchTerms.length - 1);
+  
+  computed: {
+    getBookCount() {
+      let docs = [];
+      let doc;
+      for (doc of this.documents) {
+        const docHasName = doc.documentName.includes(this.searchTerms);
+        if (docHasName) {
+          docs.push(doc);
+        }
       }
+      return docs.length;
     }
   },
-  
 
   methods: {
-    getParagraphs() {
-      let p = [];
-      this.documents.forEach((d) => {
-        p.push(this.getPara(d));
-      })
-      return _.flatten(p);
+    hideParaSearch() {
+      this.showBooks = false;
     },
 
-    changeMode(mode) {
-      this.mode = mode;
-      this.markTerms();
+    toggleFullScreen(status) {
+      this.viewerFullScreen = status;
     },
 
-    getParas(paragraphs) {
-      return paragraphs.filter(p => p.includes(this.searchTerms));
+    updateSearchTerms(terms) {
+      this.searchTerms = terms;
     },
 
-    getPara(document) {
-      let paras = this.getParas(document.paragraphs);
-      let constructedParaObj = [];
+    showBookList() {
+      if (this.isMobile) {
+        this.showBooks = true;
+      }
+      this.showBookSearch = true;
+      this.showParaSearch = false;
+    },
 
-      paras.forEach((p) => {
-        if (p.length > 0) {
-          let obj = {
-            id: document._id,
-            name: document.documentName,
-            paragraph: p
-          }
-          constructedParaObj.push(obj);
+    toggleParaSearch() {
+      if (this.isMobile) {
+        this.showBooks = true;
+      }
+      this.showParaSearch = true;
+      this.showBookSearch = false;
+    },
+
+    search() {
+      const isBookSearch = this.searchMode !== 'All';
+      if (isBookSearch) {
+        this.docsInList = [];
+        this.showAllResults = false;
+        this.unmarkTerms();
+        this.searchForBooksUI();
+      } else {
+        this.searchForParas()
+      }
+    },
+
+    onKeyboardRender() {
+      document.getElementById('simpleKeyboard').value = this.searchTerms;
+    },
+
+    onKeyPress(button) {
+      if (button === '{cancel}') {
+        this.searchTerms = '';
+        this.showAllResults = false;
+        this.showKeyboard = false;
+        this.getAllDocuments();
+      } else if (button === '{enter}') {
+        this.showKeyboard = false;
+      }
+    },
+
+    onChange(input) {
+      this.searchTerms = this.searchTerms + input.substr(input.length - 1, input.length);
+    },
+
+    unMarkViewer() {
+      var context = document.querySelector('.viewer');
+      var instance = new Mark(context);
+      instance.unmark();
+    },
+
+    resetResults() {
+      this.showAllResults = false;
+      this.getAllDocuments();
+      this.unMarkViewer();
+      this.seenParas = [];
+      document.getElementById('documentContainer').scrollTo(0, 0);
+    },
+
+    resetSearchTerms() {
+      this.searchTerms = '';
+      this.resetResults();
+    },
+
+    getName(name) {
+      return name.indexOf('.docx') !== -1 ? name.substr(0, name.length - 5) : name;
+    },
+
+    searchForBooksUI() {
+      // ---------------------------------------------------------------------
+      // Method named as UI Because there is also server side filtering logic.
+      // Please use `searchForBooks()` method for server side filtering if required
+      // Filtering Can be done in UI because for a language, books cannot exceed 1000.
+      // There should be no performance penalty! Uses native `for loop` for max performance.
+      // ------------------------------------------------------------------------
+      let docs = [];
+      let doc;
+      for (doc of this.documents) {
+        const docHasName = doc.documentName.includes(this.searchTerms);
+        if (docHasName) {
+          docs.push(doc);
+        }
+      }
+      this.docsInList = docs;
+    },
+
+    getListItems() {
+      const isBookSearch = (this.searchTerms && this.searchTerms.length > 0 && this.searchMode !== 'All');
+      let docs = isBookSearch ? this.docsInList : this.documents;
+
+      let items = docs.map((doc) => {
+        return {
+          title: this.getName(doc.documentName),
+          icon: 'book',
+          id: doc._id,
+          content: doc.content ? doc.content : '',
+          name: doc.documentName
         }
       });
-      return constructedParaObj;
+      return items;
     },
 
-    getIndicesOf(searchStr, str) {
-      var searchStrLen = searchStr.length;
-      if (searchStrLen == 0) {
-          return [];
-      }
-      var startIndex = 0, index, indices = [];
-      while ((index = str.indexOf(searchStr, startIndex)) > -1) {
-          indices.push(index);
-          startIndex = index + searchStrLen;
-      }
-      return indices;
+    changeMode(searchMode) {
+      this.searchMode = searchMode;
     },
-  
+
     toggleKeyboard() {
       this.showKeyboard = !this.showKeyboard;
     },
@@ -193,7 +258,36 @@ export default {
       this.showKeyboard = false;
     },
     
+    searchForParas() {
+      if (this.searchTerms.length > 0) {
+        this.isLoading = true;
+        let terms = this.wrapWordsWithQuotes(this.searchTerms);
+        DocumentService.filterParas({ terms }).then((data) => {
+          this.paragraphs = data.body;
+          this.isLoading = false;
+          this.showAllResults = true;
+          this.markTerms();
+        }, (err) => {
+          this.isLoading = false;
+        })
+      }
+    },
+
+    wrapWordsWithQuotes(input) {
+      // Wrap each word from input with quotes
+      let output = '';
+      output = `\"${input}\"`;
+      return output.trim();
+    },
+
+    async getParaCount() {
+      let terms = this.wrapWordsWithQuotes(this.searchTerms);
+      const { body: count } = await DocumentService.getCount({ terms });
+      this.termCount = count;        
+    },
+
     searchForBooks() {
+      this.isLoading = true;
       this.$nextTick(() => {
         let payload = {
           terms: this.searchTerms.length > 0 ? this.searchTerms : undefined,
@@ -202,39 +296,130 @@ export default {
         DocumentService.getDocuments(payload).then((data) => {
           this.documents = data.body;
           this.markTerms();
+          this.showAllResults = this.searchMode === 'All' && this.searchTerms.length > 0;
+          this.isLoading = false;
         }, (err) => {
           this.errorMessage = 'Unable to fetch documents';
           this.$bus.emit('snackOn', this.errorMessage);
+          this.isLoading = false;
         })
       });
     },
 
     markTerms() {
       this.$nextTick(() => {
-        var context = document.querySelectorAll('.paragraphs');
+        var context = document.querySelectorAll('.card');
         var instance = new Mark(context);
-        instance.mark(this.searchTerms);
+        instance.mark(this.searchTerms, { separateWordSearch: false });
       });
     },
 
+    unmarkTerms() {
+      var context = document.querySelectorAll('.card');
+      var instance = new Mark(context);
+      instance.unmark();
+    },
+
     getAllDocuments() {
-      this.isError = false;
+      this.isLoading = true;
       DocumentService.getDocuments().then((data) => {
         this.documents = data.body;
+        this.$refs.viewer.getFile(data.body[0]._id);
+        this.activeDocumentId = data.body[0]._id;
+        this.isLoading = false;
       }, (err) => {
         this.errorMessage = 'Unable to fetch documents';
-        this.isError = true;
+        this.$bus.emit('snackOn', this.errorMessage);
+        this.isLoading = false;
       })
     },
     
-    showContent(content) {
-      this.$router.push({path: 'books/viewer/' + content.id, query: { terms: this.searchTerms, index: content.index }});
+    showContent(document) {
+      if (document.id) {
+        this.activeDocumentId = document.id;
+        this.$refs.viewer.getFile(document.id);
+      } else {
+        // Search results hit here.
+        let doc = this.documents.filter(d => d.documentName === document.name);
+
+        if (doc) {
+          let id = doc ? doc[0]._id : '';
+                    
+          if (document.index !== this.activeIndex) {
+            this.activeIndex = document.index;
+          }
+
+          if (id !== this.activeDocumentId) {
+            this.activeDocumentId = id;
+            this.$refs.viewer.getFile(id);
+          } else {
+            this.$nextTick(() => {
+              this.$refs.viewer.markText(document.index);
+              this.$refs.viewer.scrollToPara(document.paraId);
+            })
+          }
+        }
+      }
+      if (this.isMobile) {
+        this.showBooks = false;
+      }
+    },
+
+    deleteDocument(item) {
+      DocumentService.deleteParas({ name: item.name }).then((data) => {
+        if (data.body.n > 0) {
+          DocumentService.deleteDoc({ id: item.id }).then((data) => {
+            this.errorMessage = 'Document Successfully Deleted.';
+            this.$bus.emit('snackOn', this.errorMessage);
+            this.getAllDocuments();
+          }, (err) => {
+            this.errorMessage = 'Unable to delete Document. Document Delete failed.';
+            this.$bus.emit('snackOn', this.errorMessage);          
+          })
+        } else {
+          this.errorMessage = 'Unable to delete Associated Paras. Document Delete failed.';
+          this.$bus.emit('snackOn', this.errorMessage);
+        }
+      }, (err) => {
+        this.errorMessage = 'Unable to delete Associated Paras. Document Delete failed.';
+        this.$bus.emit('snackOn', this.errorMessage);
+      })
+    }
+  },
+
+  watch: {
+    searchTerms(n) {
+      if (n === '') {
+        this.searchMode = 'books';
+        this.resetResults();
+      } else {
+        this.getParaCount();
+      }
     }
   }
 };
 </script>
 
 <style>
+mark {
+  background-color: #87cefa !important;
+  color: #000000;
+  font-weight: 600;
+}
+</style>
+
+<style scoped>
+.book-container {
+  display: flex;
+}
+
+.aside {
+  min-width: 400px;
+  max-width: 400px;
+  top: 100px;
+  transform: translateX(0, 10);
+  background-color: white;
+}
 
 .highlight {
   background-color: aqua;
@@ -254,21 +439,13 @@ export default {
   left: auto;
 }
 
-.keyboard-wrapper {
-  border: 1px solid black;
-  height: 35px;
-  width: 200px;
-  padding: 5px;
-}
-
 .search-field {
   cursor: pointer;
-  width: 430px;
   display: flex;
 }
 
 .simple-keyboard {
-  width: 600px;
+  width: 530px;
   z-index: 99;
 }
 
@@ -285,16 +462,80 @@ export default {
   align-self: center;
 }
 
-.text-hightlight {
-  color: lightseagreen;
-  text-decoration: underline;
-}
-
 .books, .all {
   padding: 10px;
+  color: white;
+}
+
+.text-hightlight {
+  color: #87cefa;
+  text-decoration: underline;
 }
 
 .search-button {
   align-self: center;
+}
+
+.viewer {
+  position: relative;
+  font-size: 18px;
+  height: 83vh;
+  overflow-y: scroll;
+}
+
+.keyboard-icon {
+  align-self: center;
+} 
+
+.results-container {
+  overflow: auto;
+  height: 68vh;
+}
+
+.viewer-left {
+  margin-left: 0px;
+}
+
+.search-settings {
+  align-self: center;
+}
+
+.clear-icon {
+  cursor: pointer;
+}
+
+.result-count {
+  color: black;
+  display: flex;
+  padding-left: 10px;
+}
+
+.hit-counter {
+  flex: 1;
+}
+
+.options-container {
+  padding-left: 10px;
+}
+
+.search-mode {
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.search-mode-highlighted {
+  color: #84cefa;
+  text-decoration: underline;
+}
+
+.full-screen {
+  position: absolute;
+  width: 100vw;
+  height: 100vw;
+}
+
+.right-middle {
 }
 </style>

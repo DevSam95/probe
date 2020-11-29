@@ -10,8 +10,9 @@
       <v-text-field
         class="form-text"
         label="Author"
-        :v-model="model.author">
+        v-model="model.author">
       </v-text-field>
+      <v-checkbox v-model="isSong" label="Song"></v-checkbox>
       <div class="upload-container">
         <div class="image-container">
           <v-icon v-if="file.name">attachment</v-icon><span> {{ file.name }}</span>
@@ -47,6 +48,8 @@ import { mapGetters } from 'vuex';
 
 Vue.use(VueResource);
 
+const api = process.env.VUE_APP_API || 'http://localhost:1234';
+
 export default {
   props: {
     value: {
@@ -72,13 +75,34 @@ export default {
       showProgress: false,
       model: {
         title: '',
-        author: ''
+        author: '' 
       },
+      // Not ideal??? idk...
+      seasons: [
+        {
+          period: 'S',
+          val: 0.4
+        },
+        {
+          period: 'M',
+          val: 0.5
+        },
+        {
+          period: 'A',
+          val: 0.6
+        },
+        {
+          period: 'E',
+          val: 0.7
+        }
+
+      ],
       percentage: 0,
       snackMessage: '',
       showSnack: false,
       arrayOfParagraphs: [],
-      html: ''
+      html: '',
+      isSong: false
     };
   },
 
@@ -93,6 +117,11 @@ export default {
   },
 
   computed: {
+    isSongFile() {
+      console.log(this.isSong);
+      return this.isSong;
+    },
+
     ...mapGetters(['isLoggedIn'])
   },
 
@@ -112,29 +141,70 @@ export default {
         let file = files[0];
         this.file = file;
       }
+      
       this.parseDocx();
     },
 
+    getDate(file) {
+
+      // Split the filename and look for characters and replace them with numbers. (sorting)
+      let date = file.name.split(' ')[0].replace(/-/g, '');
+      let dateAsInt;
+      this.seasons.forEach((season) => {
+        if (date.includes(season.period)) {
+          date = date.replace(season.period, '');
+          dateAsInt = parseFloat(date) + parseFloat(season.val);
+          return dateAsInt;
+        }
+      });
+      return dateAsInt ? dateAsInt : date;
+    },
+    
     parseDocx() {
       let file = this.file;
       let buffer = [];
       var reader = new FileReader();
-      reader.onload = (() => {
-        return (e) => { 
-          buffer = e.target.result;
-          mammoth.convertToHtml({arrayBuffer: buffer})
-          .then((result) => {
-            let html = result.value;
-            this.html = html;
-            this.arrayOfParagraphs = html.split('<p>');
-            this.arrayOfParagraphs = this.arrayOfParagraphs.map((p, i) => {
-              p = `<p id="${i}"> ${p}`;
-              return p;
-            });
-          }).done();
-        }
-      })(file);
-      reader.readAsArrayBuffer(file);
+
+      if (this.isSongFile) {
+        reader.onload = (() => {
+          return (e) => { 
+            buffer = e.target.result;
+            mammoth.convertToHtml({arrayBuffer: buffer})
+                   .then((result) => {
+                    let html = result.value;
+                    console.log(result);
+                   }).done();
+          };
+        })(file);
+        reader.readAsArrayBuffer(file);        
+      } else {
+        const dateAsString = file.name.split(' ')[0].replace(/-/g, '');
+        let date = this.getDate(file);
+
+        reader.onload = (() => {
+          return (e) => {
+            buffer = e.target.result;
+            mammoth.convertToHtml({arrayBuffer: buffer})
+            .then((result) => {
+              let html = result.value;
+              let n = 0;
+              this.html = html.replace(/<p>/g, function() {
+                return `<p id="${dateAsString + (++n) + ''}">`;
+              });
+              this.arrayOfParagraphs = html.split('<p>').map((p, i) => {
+                return {
+                  paragraph: p || ' ',
+                  documentName: file.name,
+                  pid: dateAsString + (i) + '',
+                  year: date,
+                  pindex: i
+                }
+              });
+            }).done();
+          }
+        })(file);
+        reader.readAsArrayBuffer(file);
+      }
     },
 
     removeFile() {
@@ -143,34 +213,58 @@ export default {
     },
 
     uploadFile(file) {
-      this.showSnack = false;
-      let formData = new FormData();
-      let title = this.model.title ? this.model.title : file.name;
-      let author = this.model.author ? this.model.author : 'Sam';
+      if (this.isSong) {
+        
+      } else {
+        this.showSnack = false;
+        const formData = new FormData();
+        const title = this.model.title ? this.model.title : file.name;
+        const author = this.model.author ? this.model.author : 'Admin';
+        let year= this.getDate(file);
 
-      let payload = {
-        document: file,
-        fileName: title,
-        author: author,
-        paragraphs: this.arrayOfParagraphs,
-        content: this.html,
-        createdBy: 'Sam'
-      }
-
-      this.$http.post('http://localhost:1234/docs/uploadDoc', payload, {
-        progress: (e) => {
-          if (e.lengthComputable) {
-            this.percentage = e.loaded / e.total * 100;
-          }
+        let payload = {
+          document: file,
+          fileName: title,
+          author: author,
+          content: this.html,
+          createdBy: 'Admin',
+          year
         }
-      }).then(() => {
-        this.snackMessage = 'Upload succesfull';
-        this.$bus.emit('snackOn', this.snackMessage);
+
+        this.$http.post(`${api}/docs/uploadDoc`, payload, {
+          progress: (e) => {
+            if (e.lengthComputable) {
+              this.percentage = e.loaded / e.total * 100;
+            }
+          }
+        }).then((d) => {
+          if (d.body.status === 200) {
+            this.$http.post(`${api}/docs/uploadParas`, this.arrayOfParagraphs).then((d) => {
+              if (d.body.status === 200) {
+                this.snackMessage = 'Upload succesfull';
+                this.$bus.emit('snackOn', this.snackMessage);
+                this.file = {};
+              } else {
+                this.snackMessage = 'Unable to upload documents';
+                this.$bus.emit('snackOn', this.snackMessage);
+              }
+            }, (e) => {
+              this.snackMessage = 'Unable to upload documents';
+              this.$bus.emit('snackOn', this.snackMessage);
+            })
+          } else if (d.body.code === 11000) {
+              this.snackMessage = 'Unable to upload documents. Document Already exists';
+              this.$bus.emit('snackOn', this.snackMessage);
+            } else {
+            this.snackMessage = d.body.message;
+            this.$bus.emit('snackOn', this.snackMessage);
+          }
+        }, (err) => {
+          this.snackMessage = 'Unable to upload documents: ' + err.message;
+          this.$bus.emit('snackOn', this.snackMessage);
+        })
         this.file = {};
-      }, (err) => {
-        this.snackMessage = 'Unable to fetch documents: ' + err.message;
-        this.showSnack = true;
-      })
+      }
     }
   }
 };

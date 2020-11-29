@@ -1,0 +1,7 @@
+@font-face {
+    font-family: 'TM-TTValluvar Normal';
+    src: url("../fonts/TM-TTValluvar-Normal.ttf") format("ttf")
+    url("../fonts/TM-TTValluvar-Normal.woff2") format("woff2");
+    font-weight: normal;
+    font-size: normal;
+}
